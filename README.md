@@ -6,7 +6,11 @@ Project Overview
 This project analyzes historical flight data to identify performance patterns, delay trends, and operational bottlenecks across US airlines, routes, and cities. The pipeline transforms raw flight records into business-ready analytics tables for visualization in Tableau.
 
 Project Architecture
-CSV > PostgreSQL DB > Transformation > Tableau Visualization
+CSV (Download from BTS)
+PostgreSQL DB Creation (flight_analysis_schema)
+Data Load (flight_analysis_table_creation.py)
+Transformation (load_bts_data.py)
+Tableau Visualization
 
 Analytical Tables Created
 
@@ -24,6 +28,7 @@ City-level arrival performance metrics (same structure as departure_delay)
 
 Pandas Transformations
 Airline YoY Performance
+
 <img width="739" height="106" alt="image" src="https://github.com/user-attachments/assets/f93181da-cac2-4bdc-9c7a-22e082966f84" />
 
 1. Added pct change column
@@ -36,6 +41,7 @@ Airline YoY Performance
 <img width="996" height="103" alt="image" src="https://github.com/user-attachments/assets/e10275f6-6e90-4a7b-b428-25785503b903" />
 
 Departure Delay
+
 <img width="448" height="107" alt="image" src="https://github.com/user-attachments/assets/8f8faae1-ffca-4a94-97e9-b1354008b2b7" />
 
 1. Added delay categories
@@ -51,6 +57,7 @@ Departure Delay
 <img width="1283" height="105" alt="image" src="https://github.com/user-attachments/assets/3f858929-ac33-4be3-95af-38542234a064" />
 
 Arrival Delay
+
 <img width="551" height="100" alt="image" src="https://github.com/user-attachments/assets/1f52d14d-3b6a-45b9-8e2d-905c6a4ff340" />
 
 1. Added delay categories
