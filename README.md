@@ -74,5 +74,5 @@ Arrival Delay
 
 Tableau Analysis
 With the above queries defined as a data source for tableau, the following dashboard was created:
-https://public.tableau.com/authoring/AirlineYoYChange/Sheet1/Flight%20Analytics#1
+https://public.tableau.com/app/profile/patrick.mead/vizzes
 
