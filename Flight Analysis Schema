@@ -165,7 +165,7 @@ ALTER TABLE flights ADD CONSTRAINT chk_diverted CHECK (diverted IN (0, 1));
 -- TABLE COMMENTS
 -- ============================================================================
 
-COMMENT ON TABLE flights IS 'Fact table: Individual flight records from BTS (2022-2024)';
+COMMENT ON TABLE flights IS 'Fact table: Individual flight records from BTS (2021-2022)';
 COMMENT ON TABLE airlines IS 'Dimension table: Airline carrier information';
 COMMENT ON TABLE airports IS 'Dimension table: Airport codes and locations';
 
@@ -176,42 +176,3 @@ COMMENT ON COLUMN flights.arr_del15 IS 'Binary: 1 if arrival delay >= 15 min';
 COMMENT ON COLUMN flights.cancellation_code IS 'A=Carrier, B=Weather, C=NAS, D=Security';
 COMMENT ON COLUMN flights.wheels_off IS 'Time wheels left ground (HHMM)';
 COMMENT ON COLUMN flights.wheels_on IS 'Time wheels touched ground (HHMM)';
-
--- ============================================================================
--- UTILITY QUERIES
--- ============================================================================
-
--- Check database size
-CREATE OR REPLACE VIEW v_database_stats AS
-SELECT 
-    schemaname,
-    relname as tablename,
-    pg_size_pretty(pg_total_relation_size(schemaname||'.'||relname)) AS total_size,
-    pg_size_pretty(pg_relation_size(schemaname||'.'||relname)) AS table_size,
-    pg_size_pretty(pg_total_relation_size(schemaname||'.'||relname) - pg_relation_size(schemaname||'.'||relname)) AS index_size,
-    n_live_tup as row_count
-FROM pg_stat_user_tables
-ORDER BY pg_total_relation_size(schemaname||'.'||relname) DESC;
-
--- ============================================================================
--- SAMPLE QUERIES TO TEST
--- ============================================================================
-
--- Test query 1: Count flights by year
--- SELECT year, COUNT(*) as flights FROM flights GROUP BY year ORDER BY year;
-
--- Test query 2: Top 10 busiest routes
--- SELECT origin_airport, dest_airport, COUNT(*) as flights 
--- FROM flights 
--- GROUP BY origin_airport, dest_airport 
--- ORDER BY flights DESC 
--- LIMIT 10;
-
--- Test query 3: Average delay by carrier
--- SELECT carrier_code, 
---        ROUND(AVG(arr_delay), 2) as avg_delay,
---        COUNT(*) as flights
--- FROM flights 
--- WHERE cancelled = 0
--- GROUP BY carrier_code 
--- ORDER BY avg_delay DESC;
