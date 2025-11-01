@@ -1,10 +1,8 @@
-"""
-BTS Flight Data ETL Script - Customized for 2022-2024 Data
-Loads Bureau of Transportation Statistics flight data into PostgreSQL
+# BTS Flight Data ETL Script - Customized for 2021-2022 Data
+# Loads Bureau of Transportation Statistics flight data into PostgreSQL
+# Author: Patrick Mead
+# Last Updated: 2025
 
-Author: Patrick Mead
-Last Updated: 2025
-"""
 
 import pandas as pd
 import psycopg2
@@ -20,10 +18,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# ============================================================================
-# DATABASE CONNECTION CONFIGURATION
-# ============================================================================
-
+# database configuration
 DB_CONFIG = {
     'dbname': 'bts_flights',
     'user': 'postgres',
@@ -32,10 +27,7 @@ DB_CONFIG = {
     'port': '5432'
 }
 
-# ============================================================================
-# COLUMN MAPPING - Your BTS CSV Fields to Database Schema
-# ============================================================================
-
+# column mapping
 COLUMN_MAPPING = {
     # Date/Time
     'FL_DATE': 'flight_date',
@@ -117,12 +109,9 @@ COLUMN_MAPPING = {
     'FLIGHTS': 'flights_count'
 }
 
-# ============================================================================
-# HELPER FUNCTIONS
-# ============================================================================
-
+# helper functions
+# create db connection
 def create_database_connection():
-    """Create PostgreSQL database connection"""
     try:
         conn = psycopg2.connect(**DB_CONFIG)
         logger.info("Database connection established")
@@ -130,20 +119,17 @@ def create_database_connection():
     except Exception as e:
         logger.error(f"Failed to connect to database: {e}")
         raise
-
+# create sqlalchemy connection
 def create_sqlalchemy_engine():
-    """Create SQLAlchemy engine for pandas to_sql"""
     conn_string = f"postgresql://{DB_CONFIG['user']}:{DB_CONFIG['password']}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['dbname']}"
     return create_engine(conn_string)
 
+# load airports
 def load_airports_from_first_file(csv_file, conn):
-    """Extract unique airports from first file and load into airports table"""
     logger.info(f"Extracting airports from {os.path.basename(csv_file)}...")
     
-    # Read just the airport columns
     df = pd.read_csv(csv_file, usecols=['ORIGIN', 'ORIGIN_CITY_NAME', 'ORIGIN_STATE_ABR',
                                           'DEST', 'DEST_CITY_NAME', 'DEST_STATE_ABR'])
-    
     cursor = conn.cursor()
     
     # Get unique origin airports
@@ -157,8 +143,6 @@ def load_airports_from_first_file(csv_file, conn):
     # Combine and deduplicate
     all_airports = pd.concat([origin_airports, dest_airports]).drop_duplicates('airport_code')
     
-    logger.info(f"Loading {len(all_airports)} unique airports...")
-    
     for _, row in all_airports.iterrows():
         cursor.execute("""
             INSERT INTO airports (airport_code, city_name, state_code) 
@@ -170,8 +154,8 @@ def load_airports_from_first_file(csv_file, conn):
     logger.info(f"Loaded {len(all_airports)} airports")
     cursor.close()
 
+# load airlines
 def load_airlines_from_first_file(csv_file, conn):
-    """Extract unique carriers from first file"""
     logger.info(f"Extracting airlines from {os.path.basename(csv_file)}...")
     
     df = pd.read_csv(csv_file, usecols=['OP_UNIQUE_CARRIER'])
@@ -190,8 +174,8 @@ def load_airlines_from_first_file(csv_file, conn):
     logger.info(f"Loaded {len(unique_carriers)} airlines")
     cursor.close()
 
+# clean flight data
 def clean_flight_data(df):
-    """Clean and prepare flight data for loading"""
     logger.info(f"Cleaning data: {len(df)} rows...")
     
     # Rename columns to match database schema
@@ -221,8 +205,8 @@ def clean_flight_data(df):
     logger.info(f"Cleaned: {len(df_clean)} rows, {len(df_clean.columns)} columns")
     return df_clean
 
+# load flight data
 def load_flights_data(csv_file, engine, chunk_size=50000):
-    """Load flight data from CSV in chunks"""
     logger.info(f"Loading flight data from {os.path.basename(csv_file)}...")
     
     total_rows = 0
@@ -237,55 +221,18 @@ def load_flights_data(csv_file, engine, chunk_size=50000):
             # Clean the chunk
             chunk_clean = clean_flight_data(chunk)
             
-            # Load to database - removed method='multi' to avoid parameter limits
-            # This is slower but more reliable with large column counts
+            # Load to database
             chunk_clean.to_sql('flights', engine, if_exists='append', index=False)
-            
             total_rows += len(chunk)
             
-        logger.info(f"✓ Loaded {total_rows:,} rows from {os.path.basename(csv_file)}")
         return total_rows
         
     except Exception as e:
         logger.error(f"Error loading {os.path.basename(csv_file)}: {e}")
         raise
 
-def validate_data_load(conn):
-    """Run validation queries"""
-    cursor = conn.cursor()
-    
-    # Count flights
-    cursor.execute("SELECT COUNT(*) FROM flights")
-    flight_count = cursor.fetchone()[0]
-    logger.info(f"\nTotal flights in database: {flight_count:,}")
-    
-    # Count by year
-    cursor.execute("""
-        SELECT year, COUNT(*) as flights 
-        FROM flights 
-        GROUP BY year 
-        ORDER BY year
-    """)
-    logger.info("\nFlights by year:")
-    for row in cursor.fetchall():
-        logger.info(f"  {row[0]}: {row[1]:,} flights")
-    
-    # Top carriers
-    cursor.execute("""
-        SELECT carrier_code, COUNT(*) as flights 
-        FROM flights 
-        GROUP BY carrier_code 
-        ORDER BY flights DESC 
-        LIMIT 5
-    """)
-    logger.info("\nTop 5 carriers:")
-    for row in cursor.fetchall():
-        logger.info(f"  {row[0]}: {row[1]:,} flights")
-    
-    cursor.close()
-
+# find csvs in the base folder
 def find_all_csv_files(base_folder):
-    """Find all CSV files in folder structure"""
     csv_files = []
     for root, dirs, files in os.walk(base_folder):
         for file in files:
@@ -293,16 +240,10 @@ def find_all_csv_files(base_folder):
                 csv_files.append(os.path.join(root, file))
     return sorted(csv_files)
 
-# ============================================================================
-# MAIN ETL PROCESS
-# ============================================================================
-
+# etl process
 def load_multiple_files(csv_files):
-    """Load multiple CSV files into database"""
     start_time = datetime.now()
-    logger.info("="*70)
     logger.info("BTS FLIGHT DATA ETL PROCESS")
-    logger.info("="*70)
     
     try:
         # Create connections
@@ -317,17 +258,9 @@ def load_multiple_files(csv_files):
         # Load each file
         total_rows = 0
         for i, csv_file in enumerate(csv_files, 1):
-            logger.info(f"\n{'='*70}")
             logger.info(f"File {i}/{len(csv_files)}: {os.path.basename(csv_file)}")
-            logger.info(f"{'='*70}")
             rows = load_flights_data(csv_file, engine)
             total_rows += rows
-        
-        # Validate
-        logger.info(f"\n{'='*70}")
-        logger.info("VALIDATION")
-        logger.info(f"{'='*70}")
-        validate_data_load(conn)
         
         # Close connections
         conn.close()
@@ -335,24 +268,18 @@ def load_multiple_files(csv_files):
         # Calculate runtime
         end_time = datetime.now()
         runtime = end_time - start_time
-        
-        logger.info(f"\n{'='*70}")
         logger.info("ETL COMPLETED SUCCESSFULLY!")
-        logger.info(f"{'='*70}")
         logger.info(f"Total rows loaded: {total_rows:,}")
         logger.info(f"Files processed: {len(csv_files)}")
         logger.info(f"Runtime: {runtime}")
-        logger.info(f"{'='*70}")
         
     except Exception as e:
         logger.error(f"ETL process failed: {e}")
         raise
 
 if __name__ == "__main__":
-    # ========================================================================
-    # CONFIGURATION: Update this path to your BTS_Data folder
-    # ========================================================================
-    BASE_FOLDER = "C:\\Users\\pmead\\OneDrive\\Documents\\Computer Programming\\BTS Data\\2022"
+    # enter base folder
+    BASE_FOLDER = "BASE FOLDER"
     
     if not os.path.exists(BASE_FOLDER):
         logger.error(f"Folder not found: {BASE_FOLDER}")
@@ -364,11 +291,6 @@ if __name__ == "__main__":
             logger.error("Please download BTS data and save as YYYY_MM.csv")
         else:
             logger.info(f"\nFound {len(csv_files)} CSV files:")
-            for f in csv_files[:10]:  # Show first 10
-                logger.info(f"  ✓ {os.path.basename(f)}")
-            if len(csv_files) > 10:
-                logger.info(f"  ... and {len(csv_files) - 10} more files")
-            
             response = input(f"\nLoad {len(csv_files)} files into database? (yes/no): ")
             if response.lower() in ['yes', 'y']:
                 load_multiple_files(csv_files)
