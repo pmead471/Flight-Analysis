@@ -1,0 +1,60 @@
+-- avg delay by airline
+SELECT 
+    a.airline_name as airline,
+    ROUND(AVG(CASE WHEN year = 2021 THEN f.arr_delay END), 2) as avg_delay_2021,
+    ROUND(AVG(CASE WHEN year = 2022 THEN f.arr_delay END), 2) as avg_delay_2022,
+    ROUND(AVG(CASE WHEN year = 2022 THEN f.arr_delay END) - 
+          AVG(CASE WHEN year = 2021 THEN f.arr_delay END), 2) as change_2021_to_2022,
+    COUNT(CASE WHEN year = 2021 THEN 1 END) as flights_2021,
+    COUNT(CASE WHEN year = 2022 THEN 1 END) as flights_2022
+FROM flights f
+JOIN airlines a on a.carrier_code = f.carrier_code
+WHERE year IN (2021, 2022)
+  AND cancelled = 0
+GROUP BY a.airline_name
+ORDER BY change_2021_to_2022
+
+-- top 10 worst delays by route
+with cte as(
+select count(*) as count, origin_airport, dest_airport, avg(arr_delay) as average
+from flights
+group by origin_airport, dest_airport
+Order By avg(arr_delay)
+)
+Select * from cte
+where cte.count > 2500
+Order By cte.average desc
+limit 10
+
+-- delay by day of week
+select day_of_week, round(avg(carrier_delay),2) as carrier, 
+		round(avg(weather_delay),2) as weather, 
+		round(avg(arr_delay),2) as arrival, 
+		round(avg(dep_delay),2) as departure
+from flights
+where cancelled = 0
+group by day_of_week
+
+-- departure delay
+with cte as(
+select count(*) as count,a.city_name as city_name, round(avg(f.dep_delay_minutes),2) as delay_minutes, round(avg(f.taxi_out),2) as taxi, round(avg(f.cancelled)*100,2) as percent_cancelled
+from flights f
+join airports a on f.origin_airport = a.airport_code
+Group by a.city_name
+)
+select cte.city_name, cte.delay_minutes, cte.taxi, cte.percent_cancelled
+from cte
+where cte.count > 15000
+Order By cte.delay_minutes desc
+
+-- arrival delay
+with cte as(
+select count(*) as count,a.city_name as city_name, round(avg(f.arr_delay_minutes),2) as delay_minutes, round(avg(f.taxi_in),2) as taxi, round(avg(f.cancelled)*100,2) as percent_cancelled
+from flights f
+join airports a on f.dest_airport = a.airport_code
+Group by a.city_name
+)
+select cte.city_name, cte.delay_minutes, cte.taxi, cte.percent_cancelled
+from cte
+where cte.count > 15000
+Order By cte.delay_minutes desc
