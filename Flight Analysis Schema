@@ -1,0 +1,288 @@
+-- ============================================================================
+-- BTS Flight Data - PostgreSQL Database Schema (2022-2024)
+-- Source: U.S. Department of Transportation, Bureau of Transportation Statistics
+-- Dataset: Airline On-Time Performance Data
+-- Author: Patrick Mead
+-- ============================================================================
+
+-- Drop existing tables if needed
+DROP TABLE IF EXISTS flights CASCADE;
+DROP TABLE IF EXISTS airlines CASCADE;
+DROP TABLE IF EXISTS airports CASCADE;
+
+-- ============================================================================
+-- DIMENSION TABLES
+-- ============================================================================
+
+CREATE TABLE airlines (
+    carrier_code VARCHAR(5) PRIMARY KEY,
+    airline_name VARCHAR(100),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE airports (
+    airport_code VARCHAR(3) PRIMARY KEY,
+    airport_name VARCHAR(100),
+    city_name VARCHAR(100),
+    state_code VARCHAR(2),
+    state_name VARCHAR(50),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ============================================================================
+-- FACT TABLE - Flight Data
+-- ============================================================================
+
+CREATE TABLE flights (
+    -- Primary Key
+    flight_id SERIAL PRIMARY KEY,
+    
+    -- Date/Time Dimensions
+    flight_date DATE NOT NULL,
+    year SMALLINT NOT NULL,
+    quarter SMALLINT,
+    month SMALLINT NOT NULL,
+    day_of_month SMALLINT NOT NULL,
+    day_of_week SMALLINT NOT NULL,
+    
+    -- Carrier/Flight Identifiers
+    carrier_code VARCHAR(5) NOT NULL,
+    carrier_code_alt VARCHAR(5),
+    carrier_airline_id INTEGER,
+    tail_number VARCHAR(10),
+    flight_number VARCHAR(10),
+    
+    -- Origin Airport
+    origin_airport VARCHAR(3) NOT NULL,
+    origin_airport_id INTEGER,
+    origin_city_name VARCHAR(100),
+    origin_state VARCHAR(2),
+    origin_state_name VARCHAR(50),
+    
+    -- Destination Airport
+    dest_airport VARCHAR(3) NOT NULL,
+    dest_airport_id INTEGER,
+    dest_city_name VARCHAR(100),
+    dest_state VARCHAR(2),
+    dest_state_name VARCHAR(50),
+    
+    -- Scheduled Times (HHMM format, e.g., 1430 = 2:30 PM)
+    crs_dep_time SMALLINT,
+    crs_arr_time SMALLINT,
+    
+    -- Actual Times
+    dep_time SMALLINT,
+    arr_time SMALLINT,
+    wheels_off SMALLINT,
+    wheels_on SMALLINT,
+    
+    -- Departure Performance
+    dep_delay SMALLINT,
+    dep_delay_minutes SMALLINT,
+    dep_del15 SMALLINT,
+    dep_delay_group SMALLINT,
+    
+    -- Arrival Performance
+    arr_delay SMALLINT,
+    arr_delay_minutes SMALLINT,
+    arr_del15 SMALLINT,
+    arr_delay_group SMALLINT,
+    
+    -- Taxi Times
+    taxi_out SMALLINT,
+    taxi_in SMALLINT,
+    
+    -- Flight Duration (minutes)
+    actual_elapsed_time SMALLINT,
+    crs_elapsed_time SMALLINT,
+    air_time SMALLINT,
+    
+    -- Distance
+    distance SMALLINT,
+    distance_group SMALLINT,
+    
+    -- Cancellations & Diversions
+    cancelled SMALLINT DEFAULT 0,
+    cancellation_code VARCHAR(1),
+    diverted SMALLINT DEFAULT 0,
+    
+    -- Delay Attribution (minutes, only when arr_delay > 0)
+    carrier_delay SMALLINT,
+    weather_delay SMALLINT,
+    nas_delay SMALLINT,
+    security_delay SMALLINT,
+    late_aircraft_delay SMALLINT,
+    
+    -- Additional
+    flights_count SMALLINT,
+    
+    -- Metadata
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Foreign Keys
+    CONSTRAINT fk_carrier FOREIGN KEY (carrier_code) REFERENCES airlines(carrier_code),
+    CONSTRAINT fk_origin FOREIGN KEY (origin_airport) REFERENCES airports(airport_code),
+    CONSTRAINT fk_dest FOREIGN KEY (dest_airport) REFERENCES airports(airport_code)
+);
+
+-- ============================================================================
+-- INDEXES for Performance
+-- ============================================================================
+
+-- Date-based queries (most common)
+CREATE INDEX idx_flights_date ON flights(flight_date);
+CREATE INDEX idx_flights_year_month ON flights(year, month);
+CREATE INDEX idx_flights_year ON flights(year);
+
+-- Carrier analysis
+CREATE INDEX idx_flights_carrier ON flights(carrier_code);
+
+-- Route analysis
+CREATE INDEX idx_flights_route ON flights(origin_airport, dest_airport);
+CREATE INDEX idx_flights_origin ON flights(origin_airport);
+CREATE INDEX idx_flights_dest ON flights(dest_airport);
+
+-- Performance analysis
+CREATE INDEX idx_flights_arr_delay ON flights(arr_delay) WHERE arr_delay IS NOT NULL;
+CREATE INDEX idx_flights_dep_delay ON flights(dep_delay) WHERE dep_delay IS NOT NULL;
+CREATE INDEX idx_flights_cancelled ON flights(cancelled) WHERE cancelled = 1;
+
+-- Composite indexes for common patterns
+CREATE INDEX idx_flights_carrier_date ON flights(carrier_code, flight_date);
+CREATE INDEX idx_flights_route_date ON flights(origin_airport, dest_airport, flight_date);
+
+-- ============================================================================
+-- VIEWS for Common Analyses
+-- ============================================================================
+
+-- On-Time Performance by Carrier and Date
+CREATE OR REPLACE VIEW v_ontime_performance AS
+SELECT 
+    flight_date,
+    carrier_code,
+    COUNT(*) as total_flights,
+    SUM(CASE WHEN arr_del15 = 1 THEN 1 ELSE 0 END) as delayed_flights,
+    ROUND(100.0 * SUM(CASE WHEN arr_del15 = 0 THEN 1 ELSE 0 END) / COUNT(*), 2) as ontime_pct,
+    ROUND(AVG(arr_delay), 2) as avg_arr_delay_min,
+    SUM(cancelled) as cancelled_flights,
+    SUM(diverted) as diverted_flights
+FROM flights
+WHERE cancelled = 0
+GROUP BY flight_date, carrier_code;
+
+-- Route Performance Summary
+CREATE OR REPLACE VIEW v_route_performance AS
+SELECT 
+    origin_airport,
+    dest_airport,
+    COUNT(*) as total_flights,
+    ROUND(AVG(actual_elapsed_time), 2) as avg_flight_time_min,
+    ROUND(AVG(arr_delay), 2) as avg_arr_delay_min,
+    ROUND(100.0 * SUM(CASE WHEN arr_del15 = 0 THEN 1 ELSE 0 END) / COUNT(*), 2) as ontime_pct,
+    AVG(distance) as distance_miles,
+    ROUND(AVG(taxi_out), 2) as avg_taxi_out_min,
+    ROUND(AVG(taxi_in), 2) as avg_taxi_in_min
+FROM flights
+WHERE cancelled = 0
+GROUP BY origin_airport, dest_airport
+HAVING COUNT(*) >= 50;
+
+-- Delay Cause Breakdown
+CREATE OR REPLACE VIEW v_delay_causes AS
+SELECT 
+    year,
+    month,
+    carrier_code,
+    COUNT(*) as delayed_flights,
+    ROUND(AVG(carrier_delay), 2) as avg_carrier_delay,
+    ROUND(AVG(weather_delay), 2) as avg_weather_delay,
+    ROUND(AVG(nas_delay), 2) as avg_nas_delay,
+    ROUND(AVG(security_delay), 2) as avg_security_delay,
+    ROUND(AVG(late_aircraft_delay), 2) as avg_late_aircraft_delay,
+    ROUND(100.0 * SUM(carrier_delay) / NULLIF(SUM(carrier_delay + weather_delay + nas_delay + security_delay + late_aircraft_delay), 0), 2) as pct_carrier,
+    ROUND(100.0 * SUM(weather_delay) / NULLIF(SUM(carrier_delay + weather_delay + nas_delay + security_delay + late_aircraft_delay), 0), 2) as pct_weather,
+    ROUND(100.0 * SUM(nas_delay) / NULLIF(SUM(carrier_delay + weather_delay + nas_delay + security_delay + late_aircraft_delay), 0), 2) as pct_nas
+FROM flights
+WHERE arr_delay > 0 
+  AND cancelled = 0
+GROUP BY year, month, carrier_code;
+
+-- Monthly Performance Trends
+CREATE OR REPLACE VIEW v_monthly_trends AS
+SELECT 
+    year,
+    month,
+    COUNT(*) as total_flights,
+    SUM(cancelled) as cancelled_flights,
+    ROUND(100.0 * SUM(cancelled) / COUNT(*), 2) as cancellation_rate,
+    ROUND(100.0 * SUM(CASE WHEN arr_del15 = 1 THEN 1 ELSE 0 END) / SUM(CASE WHEN cancelled = 0 THEN 1 ELSE 0 END), 2) as delay_rate,
+    ROUND(AVG(CASE WHEN cancelled = 0 THEN arr_delay END), 2) as avg_arr_delay,
+    ROUND(AVG(CASE WHEN cancelled = 0 THEN dep_delay END), 2) as avg_dep_delay
+FROM flights
+GROUP BY year, month
+ORDER BY year, month;
+
+-- ============================================================================
+-- DATA QUALITY CONSTRAINTS
+-- ============================================================================
+
+ALTER TABLE flights ADD CONSTRAINT chk_month CHECK (month BETWEEN 1 AND 12);
+ALTER TABLE flights ADD CONSTRAINT chk_day_of_month CHECK (day_of_month BETWEEN 1 AND 31);
+ALTER TABLE flights ADD CONSTRAINT chk_day_of_week CHECK (day_of_week BETWEEN 1 AND 7);
+ALTER TABLE flights ADD CONSTRAINT chk_cancelled CHECK (cancelled IN (0, 1));
+ALTER TABLE flights ADD CONSTRAINT chk_diverted CHECK (diverted IN (0, 1));
+
+-- ============================================================================
+-- TABLE COMMENTS
+-- ============================================================================
+
+COMMENT ON TABLE flights IS 'Fact table: Individual flight records from BTS (2022-2024)';
+COMMENT ON TABLE airlines IS 'Dimension table: Airline carrier information';
+COMMENT ON TABLE airports IS 'Dimension table: Airport codes and locations';
+
+COMMENT ON COLUMN flights.dep_delay IS 'Departure delay in minutes (negative = early)';
+COMMENT ON COLUMN flights.arr_delay IS 'Arrival delay in minutes (negative = early)';
+COMMENT ON COLUMN flights.dep_del15 IS 'Binary: 1 if departure delay >= 15 min';
+COMMENT ON COLUMN flights.arr_del15 IS 'Binary: 1 if arrival delay >= 15 min';
+COMMENT ON COLUMN flights.cancellation_code IS 'A=Carrier, B=Weather, C=NAS, D=Security';
+COMMENT ON COLUMN flights.wheels_off IS 'Time wheels left ground (HHMM)';
+COMMENT ON COLUMN flights.wheels_on IS 'Time wheels touched ground (HHMM)';
+
+-- ============================================================================
+-- UTILITY QUERIES
+-- ============================================================================
+
+-- Check database size
+CREATE OR REPLACE VIEW v_database_stats AS
+SELECT 
+    schemaname,
+    relname as tablename,
+    pg_size_pretty(pg_total_relation_size(schemaname||'.'||relname)) AS total_size,
+    pg_size_pretty(pg_relation_size(schemaname||'.'||relname)) AS table_size,
+    pg_size_pretty(pg_total_relation_size(schemaname||'.'||relname) - pg_relation_size(schemaname||'.'||relname)) AS index_size,
+    n_live_tup as row_count
+FROM pg_stat_user_tables
+ORDER BY pg_total_relation_size(schemaname||'.'||relname) DESC;
+
+-- ============================================================================
+-- SAMPLE QUERIES TO TEST
+-- ============================================================================
+
+-- Test query 1: Count flights by year
+-- SELECT year, COUNT(*) as flights FROM flights GROUP BY year ORDER BY year;
+
+-- Test query 2: Top 10 busiest routes
+-- SELECT origin_airport, dest_airport, COUNT(*) as flights 
+-- FROM flights 
+-- GROUP BY origin_airport, dest_airport 
+-- ORDER BY flights DESC 
+-- LIMIT 10;
+
+-- Test query 3: Average delay by carrier
+-- SELECT carrier_code, 
+--        ROUND(AVG(arr_delay), 2) as avg_delay,
+--        COUNT(*) as flights
+-- FROM flights 
+-- WHERE cancelled = 0
+-- GROUP BY carrier_code 
+-- ORDER BY avg_delay DESC;
