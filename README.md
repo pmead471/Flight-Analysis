@@ -6,11 +6,11 @@ Project Overview
 This project analyzes historical flight data to identify performance patterns, delay trends, and operational bottlenecks across US airlines, routes, and cities. The pipeline transforms raw flight records into business-ready analytics tables for visualization in Tableau.
 
 Project Architecture
-CSV (Download from BTS)
-PostgreSQL DB Creation (flight_analysis_schema)
-Data Load (flight_analysis_table_creation.py)
-Transformation (load_bts_data.py)
-Tableau Visualization
+1. CSV (Download from BTS)
+2. PostgreSQL DB Creation (flight_analysis_schema)
+3. Data Load (flight_analysis_table_creation.py)
+4. Transformation (load_bts_data.py)
+5. Tableau Visualization
 
 Analytical Tables Created
 
