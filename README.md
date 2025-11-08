@@ -2,18 +2,18 @@
 
 End-to-end ETL pipeline analyzing flight records from the Bureau of Transportation Statistics
 
-Project Overview
+## Project Overview
 
 This project analyzes historical flight data to identify performance patterns, delay trends, and operational bottlenecks across US airlines, routes, and cities. The pipeline transforms raw flight records into business-ready analytics tables for visualization in Tableau.
 
-Project Architecture
+## Project Architecture
 1. CSV (Download from BTS)
 2. PostgreSQL DB Creation (flight_analysis_schema)
 3. Data Load (flight_analysis_table_creation.py)
 4. Transformation (load_bts_data.py)
 5. Tableau Visualization
 
-Analytical Tables Created
+## Tables Created
 
 1. `airline_yoy_performance`
 Year-over-year comparison delay grouped by airline
@@ -27,7 +27,7 @@ City-level departure performance metrics (50+ cities with >15,000 flights)
 4. `arrival_delay`
 City-level arrival performance metrics (same structure as departure_delay)
 
-Pandas Transformations
+## Pandas Transformations
 Airline YoY Performance
 
 <img width="739" height="106" alt="image" src="https://github.com/user-attachments/assets/f93181da-cac2-4bdc-9c7a-22e082966f84" />
@@ -73,7 +73,8 @@ Arrival Delay
 4. Added rank columns
 <img width="1380" height="105" alt="image" src="https://github.com/user-attachments/assets/947073f2-552b-4036-af47-84c912e84808" />
 
-Tableau Analysis
+## Tableau Analysis
+
 With the above queries defined as a data source for tableau, the following dashboard was created:
 https://public.tableau.com/app/profile/patrick.mead/vizzes
 
