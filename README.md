@@ -1,5 +1,5 @@
-Flight Performance Analytics
-End-to-end ETL pipeline analyzing 2+ million flight records from the Bureau of Transportation Statistics
+#Flight Performance Analytics
+End-to-end ETL pipeline analyzing flight records from the Bureau of Transportation Statistics
 
 Project Overview
 
